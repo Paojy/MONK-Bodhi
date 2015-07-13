@@ -42,7 +42,8 @@ Bodhi:SetMovable(true)
 Bodhi:SetUserPlaced(true)
 Bodhi:EnableMouse(true)
 
-local updaterate = 0.1
+local updaterate = 0.01
+local statuewait = 0.2 -- 等雕像选目标的时间
 
 local name_sz = GetSpellInfo(127722) --  青龙之枕
 local name_fst = GetSpellInfo(116680) -- 雷光聚神茶
@@ -50,7 +51,13 @@ local name_rm = GetSpellInfo(119611) -- 复苏之雾
 local name_smg = GetSpellInfo(122783) -- 散魔功
 local name_zdj = GetSpellInfo(120954) -- 壮胆酒
 local name_qbh = GetSpellInfo(122278) -- 躯不坏
+local name_sm = GetSpellInfo(115175) -- 抚慰之雾
+local name_ul = GetSpellInfo(116670) -- 镇魂引
+local name_mt = GetSpellInfo(115294) -- 法力茶
 
+local lls = "Interface\\ICONS\\monk_stance_wiseserpent" -- 灵龙式
+local shs = "Interface\\ICONS\\monk_stance_redcrane" -- 神鹤式
+local st = "Interface\\ICONS\\ability_monk_summonserpentstatue" -- 青龙雕像
 local eh = "Interface\\ICONS\\ability_monk_expelharm" -- 移花接木
 local rm = "Interface\\ICONS\\ability_monk_renewingmists" -- 复苏之雾
 local mt = "Interface\\ICONS\\monk_ability_cherrymanatea" -- 法力茶
@@ -68,6 +75,8 @@ local yb = "Interface\\ICONS\\ability_monk_healthsphere" -- 引爆真气
 local zdj = "Interface\\ICONS\\ability_monk_fortifyingale_new" -- 壮胆酒
 local smg = "Interface\\ICONS\\spell_monk_diffusemagic" -- 散魔功
 local qbh = "Interface\\ICONS\\ability_monk_dampenharm" -- 躯不坏
+local sooth = "Interface\\ICONS\\ability_monk_soothingmists" -- 抚慰之雾气
+local ul = "Interface\\ICONS\\ability_monk_uplift" -- 镇魂引
 ---------------------------------------------------------------------------
 --[[                       Background and Border                       ]]--
 ---------------------------------------------------------------------------
@@ -97,66 +106,23 @@ end
 ---------------------------------------------------------------------------
 --[[                                APIs                               ]]--
 ---------------------------------------------------------------------------
-
-
-local function GetRMInfo(self, elapsed)
-	self.t = self.t + elapsed
-	if self.t > updaterate then
-		local SpreadNum = 0
-		local EachPredict = 0
-		local TotalPredict = 0
-		local EachHeal = 0.68 * GetSpellBonusHealing() + 7795
-		local charges = GetSpellCharges(115151)
-		if UnitBuff("player", GetSpellInfo(119611), nil, "PLAYER") then
-			SpreadNum = SpreadNum + 1
-			EachPredict = min(UnitHealthMax("player") - UnitHealth("player"), EachHeal)
-			TotalPredict = TotalPredict + EachPredict
-		end
-		if UnitInParty("player") and UnitInRaid("player") == nil then
-			for i = 1,4 do
-				if UnitBuff(string.format("party%d",i), GetSpellInfo(119611), nil, "PLAYER") then
-					SpreadNum = SpreadNum + 1
-					EachPredict = min(UnitHealthMax(string.format("party%d",i)) - UnitHealth(string.format("party%d",i)), EachHeal)
-					TotalPredict = TotalPredict + EachPredict
-				end
-			end
-		end
-		if UnitInRaid("player") then
-			for i = 1,39 do
-				if UnitBuff(string.format("raid%d",i), GetSpellInfo(119611), nil, "PLAYER") then
-					SpreadNum = SpreadNum + 1
-					EachPredict = min(UnitHealthMax(string.format("raid%d",i)) - UnitHealth(string.format("raid%d",i)), EachHeal)
-					TotalPredict = TotalPredict + EachPredict
-				end
-			end
-		end
-		
-		self.count:SetText(charges>0 and charges or "")
-		if charges == 0 then
-			self.texture:SetDesaturated(true)
+local function ShortValue(val)
+	if G.Locale == "zhCN" then
+		if (val >= 1e7) then
+			return ("%.1fkw"):format(val / 1e7)
+		elseif (val >= 1e4) then
+			return ("%.1fw"):format(val / 1e4)
 		else
-			self.texture:SetDesaturated(false)
+			return ("%d"):format(val)
 		end
-		
-		if G.Locale == "zhCN" then
-			self.hp:SetText("|cffA6FFFF"..SpreadNum..L["人"].."|r\n\n"..floor(TotalPredict/10000).."万")
+	else
+		if (val >= 1e6) then
+			return ("%.1fm"):format(val / 1e6)
+		elseif (val >= 1e3) then
+			return ("%.1fk"):format(val / 1e3)
 		else
-			self.hp:SetText("|cffA6FFFF"..SpreadNum..L["人"].."|r\n\n"..floor(TotalPredict/1000).."k")
+			return ("%d"):format(val)
 		end
-		
-		if TotalPredict > 100000 then
-			self.hp:SetTextColor(1, 0, 0)
-		elseif TotalPredict > 75000 then
-			self.hp:SetTextColor(1, .5, .2)
-		elseif TotalPredict > 50000 then
-			self.hp:SetTextColor(.5, 1, .2)
-		elseif TotalPredict > 25000 then
-			self.hp:SetTextColor(0, 1, 1)
-		else
-			self.hp:SetTextColor(.5, .5, .5)
-		end
-		
-		self.t = 0
 	end
 end
 
@@ -297,9 +263,9 @@ manabar.bd = CreateBorder(manabar, .15, .15, .15, .8, 3, 0, 0, 0)
 manabar:SetMinMaxValues(0, 1)
 
 local manapreditionbar = createStatusbar(manabar, "Bodhi manapreditionbar", texture, nil, 6, barwidth, 0, .2, .4, 1)
-manapreditionbar:SetPoint('TOP')
-manapreditionbar:SetPoint('BOTTOM')
-manapreditionbar:SetPoint('LEFT', manabar:GetStatusBarTexture(), 'RIGHT')
+manapreditionbar:SetPoint("TOP")
+manapreditionbar:SetPoint("BOTTOM")
+manapreditionbar:SetPoint("LEFT", manabar:GetStatusBarTexture(), "RIGHT")
 manapreditionbar:SetMinMaxValues(0, 1)
 
 local function Update()
@@ -338,23 +304,404 @@ bars:RegisterEvent("UNIT_POWER_FREQUENT")
 bars:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 ---------------------------------------------------------------------------
+--[[                            主按钮                                 ]]--
+---------------------------------------------------------------------------
+
+local function GetRMInfo(self, elapsed)
+	self.t = self.t + elapsed
+	if self.t > updaterate then
+		local SpreadNum = 0
+		local FullHealthNum = 0
+		local EachPredict = 0
+		local TotalPredict = 0
+		local EachHeal
+
+		if UnitBuff("player", GetSpellInfo(119611), nil, "PLAYER") then
+			if UnitHealth("player")<UnitHealthMax("player") then
+				SpreadNum = SpreadNum + 1
+			else
+				FullHealthNum = FullHealthNum + 1
+			end
+		end
+		if UnitInParty("player") and not UnitInRaid("player") then
+			for i = 1,5 do
+				if not UnitIsUnit(string.format("party%d",i), "player") and UnitBuff(string.format("party%d",i), GetSpellInfo(119611), nil, "PLAYER") then
+					if UnitHealth(string.format("party%d",i))<UnitHealthMax(string.format("party%d",i)) then
+						SpreadNum = SpreadNum + 1
+					else
+						FullHealthNum = FullHealthNum + 1
+					end
+				end
+			end
+		end
+		if UnitInRaid("player") then
+			for i = 1,40 do
+				if not UnitIsUnit(string.format("raid%d",i), "player") and UnitBuff(string.format("raid%d",i), GetSpellInfo(119611), nil, "PLAYER") then
+					if UnitHealth(string.format("raid%d",i))<UnitHealthMax(string.format("raid%d",i)) then
+						SpreadNum = SpreadNum + 1
+					else
+						FullHealthNum = FullHealthNum + 1
+					end
+				end
+			end
+		end
+		
+		if SpreadNum > 0 then
+			if SpreadNum <= 6 then
+				EachHeal = string.match(gsub(GetSpellDescription(116670), ",", ""),"%d+")
+				if UnitBuff("player", GetSpellInfo(119611), nil, "PLAYER") and UnitHealth("player")<UnitHealthMax("player") then
+					EachPredict = min(UnitHealthMax("player") - UnitHealth("player"), EachHeal)
+					TotalPredict = TotalPredict + EachPredict
+				end
+				if UnitInParty("player") and not UnitInRaid("player") then
+					for i = 1,5 do
+						local unit = string.format("party%d",i)
+						if not UnitIsUnit(unit, "player") and UnitBuff(unit, GetSpellInfo(119611), nil, "PLAYER") and UnitHealth(unit)<UnitHealthMax(unit) then
+							EachPredict = min(UnitHealthMax(unit) - UnitHealth(unit), EachHeal)
+							TotalPredict = TotalPredict + EachPredict
+						end
+					end
+				end
+				if UnitInRaid("player") then
+					for i = 1,40 do
+						local unit = string.format("raid%d",i)
+						if not UnitIsUnit(unit, "player") and UnitBuff(unit, GetSpellInfo(119611), nil, "PLAYER") and UnitHealth(unit)<UnitHealthMax(unit) then
+							EachPredict = min(UnitHealthMax(unit) - UnitHealth(unit), EachHeal)
+							TotalPredict = TotalPredict + EachPredict
+						end
+					end
+				end
+			else
+				EachHeal = string.match(gsub(GetSpellDescription(116670), ",", ""),"%d+")*6/SpreadNum
+				if UnitBuff("player", GetSpellInfo(119611), nil, "PLAYER") and UnitHealth("player")<UnitHealthMax("player") then
+					EachPredict = min(UnitHealthMax("player") - UnitHealth("player"), EachHeal)
+					TotalPredict = TotalPredict + EachPredict
+				end
+				if UnitInParty("player") and not UnitInRaid("player") then
+					for i = 1,5 do
+						local unit = string.format("party%d",i)
+						if not UnitIsUnit(unit, "player") and UnitBuff(unit, GetSpellInfo(119611), nil, "PLAYER") and UnitHealth(unit)<UnitHealthMax(unit) then
+							EachPredict = min(UnitHealthMax(unit) - UnitHealth(unit), EachHeal)
+							TotalPredict = TotalPredict + EachPredict
+						end
+					end
+				end
+				if UnitInRaid("player") then
+					for i = 1,40 do
+						local unit = string.format("raid%d",i)
+						if not UnitIsUnit(unit, "player") and UnitBuff(unit, GetSpellInfo(119611), nil, "PLAYER") and UnitHealth(unit)<UnitHealthMax(unit) then
+							EachPredict = min(UnitHealthMax(unit) - UnitHealth(unit), EachHeal)
+							TotalPredict = TotalPredict + EachPredict
+						end
+					end
+				end
+			end
+		end
+
+		local perc = floor(TotalPredict/(string.match(gsub(GetSpellDescription(116670), ",", ""),"%d+")*6)*100)
+		
+		self.hp:SetText("|cffC0FF3E"..SpreadNum.."|r|cffFFFFFF + |r|cffD3D3D3"..FullHealthNum.."|r".."\n\n"..ShortValue(TotalPredict).."-"..perc.."%")
+		
+		if perc == 100 then
+			self.hp:SetTextColor(1, 0, 0)
+		elseif perc > 75 then
+			self.hp:SetTextColor(1, .5, .2)
+		elseif perc > 50 then
+			self.hp:SetTextColor(.5, 1, .2)
+		elseif perc > 25 then
+			self.hp:SetTextColor(0, 1, 1)
+		else
+			self.hp:SetTextColor(.5, .5, .5)
+		end
+		
+		self.t = 0
+	end
+end
+--115175 玩家
+--125950 雕像
+local function GetSmoothInfo(unit)
+	local mysooth, statuesooth
+	local name,_,_,_,_,_, _, fromwho, _, _, spellID = UnitBuff(unit, name_sm) -- 找名字是抚慰之雾的BUFF
+	if name and fromwho == "player" and spellID == 115175 then -- 找到我的BUFF
+		mysooth = true
+		for i = 1, 40 do
+			local name, _,_,_,_,_, _, fromwho, _, _, spellID = UnitBuff(unit, i)
+			if name and fromwho == "player" and spellID == 125950 then
+				statuesooth = true
+				break
+			end
+		end
+	elseif name and fromwho == "player" and spellID == 125950 then -- 找到雕像的BUFF
+		statuesooth = true
+		for i = 1, 40 do
+			local name, _,_,_,_,_, _, fromwho, _, _, spellID = UnitBuff(unit, i)
+			if name and fromwho == "player" and spellID == 115175 then
+				mysooth = true
+				break
+			end
+		end
+	end
+	--print(unit,  mysooth, statuesooth)
+	return mysooth, statuesooth
+end
+
+local function GetSoothRaidInfo()
+	local mysooth, statuesooth = 0, 0
+	if select(1, GetSmoothInfo("player")) then
+		mysooth = mysooth + 1
+	end
+	if select(2, GetSmoothInfo("player")) then
+		statuesooth = statuesooth + 1
+	end
+	if UnitInParty("player") and not UnitInRaid("player") then
+		for i=1,5 do
+			local unit = string.format("party%d",i)
+			if not UnitIsUnit(unit, "player") then
+				if select(1, GetSmoothInfo(unit)) then
+					mysooth = mysooth + 1
+				end
+				if select(2, GetSmoothInfo(unit)) then
+					statuesooth = statuesooth + 1
+				end
+			end
+		end
+	elseif UnitInRaid("player") then
+		for i=1,40 do
+			local unit = string.format("raid%d",i)
+			if not UnitIsUnit(unit, "player") then
+				if select(1, GetSmoothInfo(unit)) then
+					mysooth = mysooth + 1
+				end
+				if select(2, GetSmoothInfo(unit)) then
+					statuesooth = statuesooth + 1
+				end
+			end
+		end
+	end
+	return mysooth, statuesooth
+end
+
+Bodhi.mainbutton = CreateFrame("Frame", "Bodhi_mainbutton", Bodhi)
+Bodhi.mainbutton:SetFrameLevel(1)
+Bodhi.mainbutton:SetPoint("TOPRIGHT", Bodhi, "TOPLEFT", -8, -3)
+Bodhi.mainbutton:SetSize(Iconsize+20, Iconsize+20)
+
+Bodhi.mainbutton.icon = CreateFrame("Frame", nil, Bodhi.mainbutton)
+Bodhi.mainbutton.icon:SetFrameLevel(3)
+Bodhi.mainbutton.icon:SetAllPoints(Bodhi.mainbutton)
+CreateBorder(Bodhi.mainbutton.icon, 0, 0, 0, 1, 3, 0, 0, 0)
+Bodhi.mainbutton.icon:Hide()
+
+Bodhi.mainbutton.icon.texture = Bodhi.mainbutton.icon:CreateTexture(nil, "BORDER")
+Bodhi.mainbutton.icon.texture:SetTexCoord(0.1,0.9,0.1,0.9)
+Bodhi.mainbutton.icon.texture:SetAllPoints()
+Bodhi.mainbutton.icon.texture:SetTexture(sooth)
+
+Bodhi.mainbutton.icon.mask = Bodhi.mainbutton.icon:CreateTexture(nil, "OVERLAY")
+Bodhi.mainbutton.icon.mask:SetPoint("CENTER")
+Bodhi.mainbutton.icon.mask:SetSize((Iconsize+20)*1.4, (Iconsize+20)*1.4)
+Bodhi.mainbutton.icon.mask:SetTexture("Interface\\Addons\\MONK-Bodhi\\texture\\RenaitreFadeBorder")
+Bodhi.mainbutton.icon.mask:SetDesaturated(true)
+Bodhi.mainbutton.icon.mask:SetVertexColor(1, 0, 0, 1)
+
+Bodhi.mainbutton.icon.cooldown = CreateFrame("Cooldown", nil, Bodhi.mainbutton.icon,"CooldownFrameTemplate")
+Bodhi.mainbutton.icon.cooldown:SetAllPoints(Bodhi.mainbutton.icon)
+
+Bodhi.mainbutton.icon2 = CreateFrame("Frame", nil, Bodhi.mainbutton)
+Bodhi.mainbutton.icon2:SetFrameLevel(3)
+Bodhi.mainbutton.icon2:SetAllPoints(Bodhi.mainbutton)
+CreateBorder(Bodhi.mainbutton.icon2, 0, 0, 0, 1, 3, 0, 0, 0)
+Bodhi.mainbutton.icon2:Hide()
+
+Bodhi.mainbutton.icon2.texture = Bodhi.mainbutton.icon2:CreateTexture(nil, "BORDER")
+Bodhi.mainbutton.icon2.texture:SetTexCoord(0.1,0.9,0.1,0.9)
+Bodhi.mainbutton.icon2.texture:SetAllPoints()
+
+Bodhi.mainbutton.icon2.cooldown = CreateFrame("Cooldown", nil, Bodhi.mainbutton.icon2,"CooldownFrameTemplate")
+Bodhi.mainbutton.icon2.cooldown:SetAllPoints(Bodhi.mainbutton.icon2)
+Bodhi.mainbutton.icon2.texture:SetTexture(ul)
+
+Bodhi.mainbutton.icon3 = CreateFrame("Frame", nil, Bodhi.mainbutton)
+Bodhi.mainbutton.icon3:SetFrameLevel(3)
+Bodhi.mainbutton.icon3:SetAllPoints(Bodhi.mainbutton)
+CreateBorder(Bodhi.mainbutton.icon3, 0, 0, 0, 1, 3, 0, 0, 0)
+Bodhi.mainbutton.icon3:Hide()
+
+Bodhi.mainbutton.icon3.texture = Bodhi.mainbutton.icon3:CreateTexture(nil, "BORDER")
+Bodhi.mainbutton.icon3.texture:SetTexCoord(0.1,0.9,0.1,0.9)
+Bodhi.mainbutton.icon3.texture:SetAllPoints()
+
+Bodhi.mainbutton.icon3.cooldown = CreateFrame("Cooldown", nil, Bodhi.mainbutton.icon3,"CooldownFrameTemplate")
+Bodhi.mainbutton.icon3.cooldown:SetAllPoints(Bodhi.mainbutton.icon3)
+Bodhi.mainbutton.icon3.texture:SetTexture(mt)
+
+Bodhi.mainbutton.icon4 = CreateFrame("Frame", nil, Bodhi.mainbutton)
+Bodhi.mainbutton.icon4:SetFrameLevel(2)
+Bodhi.mainbutton.icon4:SetAllPoints(Bodhi.mainbutton)
+CreateBorder(Bodhi.mainbutton.icon4, 0, 0, 0, 1, 3, 0, 0, 0)
+Bodhi.mainbutton.icon4:SetAlpha(.3)
+
+Bodhi.mainbutton.icon4.texture = Bodhi.mainbutton.icon4:CreateTexture(nil, "BORDER")
+Bodhi.mainbutton.icon4.texture:SetTexCoord(0.1,0.9,0.1,0.9)
+Bodhi.mainbutton.icon4.texture:SetAllPoints()
+
+Bodhi.mainbutton.hp = Bodhi.mainbutton:CreateFontString(nil, "OVERLAY")
+Bodhi.mainbutton.hp:SetFont(font, 18, "OUTLINE")
+Bodhi.mainbutton.hp:SetPoint("RIGHT", Bodhi.mainbutton, "LEFT", -4, 0)
+
+Bodhi.mainbutton.t = 0
+Bodhi.mainbutton:SetScript("OnUpdate", function(self, elapsed)
+	GetRMInfo(self, elapsed)
+end)
+
+Bodhi.mainbutton:SetScript("OnEvent", function(self, event, ...)
+	Bodhi.mainbutton[event](self, ...)
+end)
+
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_START")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_FAILED")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+Bodhi.mainbutton:RegisterEvent("UNIT_SPELLCAST_STOP")
+Bodhi.mainbutton:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+Bodhi.mainbutton:RegisterEvent("PLAYER_TOTEM_UPDATE")
+Bodhi.mainbutton:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+local function StateCheck(self)
+	if not  GetTotemInfo(1) then
+		self.icon4.texture:SetTexture(st)
+	elseif GetShapeshiftForm(false)== 1 then -- 灵龙式
+		self.icon4.texture:SetTexture(lls)
+	elseif GetShapeshiftForm(false)== 2 then -- 神鹤式
+		self.icon4.texture:SetTexture(shs)
+	end
+end
+
+function Bodhi.mainbutton:UPDATE_SHAPESHIFT_FORM()
+	StateCheck(self)
+end
+
+function Bodhi.mainbutton:PLAYER_TOTEM_UPDATE()
+	StateCheck(self)
+end
+
+function Bodhi.mainbutton:PLAYER_ENTERING_WORLD()
+	StateCheck(self)
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_CHANNEL_START(arg1)
+	if arg1 and arg1 ~= "player" then return end
+
+	local name, _, text, texture, startTime, endTime, isTrade, interrupt = UnitChannelInfo("player")
+
+	if not name then
+		return
+	elseif name == name_sm then
+		self.icon.cooldown:SetCooldown(startTime/1000, (endTime / 1000) - GetTime())
+		self.icon:Show()
+		self.icon.t = 0
+		self.icon:SetScript("OnUpdate", function(icon, elapsed)
+			icon.t = icon.t + elapsed
+			if icon.t > statuewait then
+				local mysooth, statuesooth = GetSoothRaidInfo()
+				if statuesooth == 1 then
+					icon.mask:Hide()
+				else
+					icon.mask:Show()
+				end
+				icon.t = 0
+				icon:SetScript("OnUpdate", nil)
+			end
+		end)
+	elseif name == name_mt then
+		self.icon3.cooldown:SetCooldown(startTime/1000, (endTime / 1000) - GetTime())
+		self.icon3:Show()
+	end
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_CHANNEL_UPDATE(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	
+	local name, _, text, texture, startTime, endTime, isTrade, interrupt = UnitChannelInfo("player")
+	
+	if not name then
+		return
+	elseif name == name_sm then
+		self.icon.cooldown:SetCooldown(startTime/1000, (endTime / 1000) - GetTime())
+		self.icon:Show()
+		self.icon.t = 0
+		self.icon:SetScript("OnUpdate", function(icon, elapsed)
+			icon.t = icon.t + elapsed
+			if icon.t > statuewait then
+				local mysooth, statuesooth = GetSoothRaidInfo()
+				if statuesooth == 1 then
+					icon.mask:Hide()
+				else
+					icon.mask:Show()
+				end
+				icon.t = 0
+				icon:SetScript("OnUpdate", nil)
+			end
+		end)
+	elseif name == name_mt then
+		self.icon3.cooldown:SetCooldown(startTime/1000, (endTime / 1000) - GetTime())
+		self.icon3:Show()
+	end
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_CHANNEL_STOP(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	self.icon:Hide()
+	self.icon.mask:Hide()
+	self.icon3:Hide()
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_START(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	
+	local name, _, text, texture, startTime, endTime, _, castid, interrupt = UnitCastingInfo("player")
+
+	if not name then
+		return
+	elseif name == name_ul then
+		self.icon2.cooldown:SetCooldown(startTime/1000, endTime/1000 - startTime/1000)
+		self.icon2:Show()
+	end
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_FAILED(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	self.icon2:Hide()
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_INTERRUPTED(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	self.icon2:Hide()
+end
+
+function Bodhi.mainbutton:UNIT_SPELLCAST_STOP(arg1)
+	if arg1 and arg1 ~= "player" then return end
+	self.icon2:Hide()
+end
+---------------------------------------------------------------------------
 --[[                             复苏之雾                              ]]--
 ---------------------------------------------------------------------------
 Bodhi.renew = CreateButton(Iconsize, rm, 1, 0, 0, "TOPLEFT", bars, "BOTTOMLEFT", 0, -7)
-
-Bodhi.renew.hp = Bodhi.renew:CreateFontString(nil, "OVERLAY")
-Bodhi.renew.hp:SetFont(font, 18, "OUTLINE")
-Bodhi.renew.hp:SetPoint("BOTTOMRIGHT", Bodhi.renew, "BOTTOMLEFT", 0, 2)
-
-Bodhi.renew.t = 0
-Bodhi.renew:SetScript("OnUpdate", function(self, elapsed)
-	GetRMInfo(self, elapsed)
-end)
 
 local ocd = 1
 
 Bodhi.UpdateRenewMist = function()
 	local charge, maxcharge, start, duration = GetSpellCharges(115151)
+	
+	Bodhi.renew.count:SetText(charge>0 and charge or "")
+	if charge == 0 then
+		Bodhi.renew.texture:SetDesaturated(true)
+	else
+		Bodhi.renew.texture:SetDesaturated(false)
+	end
+		
 	if charge == 3 then
 		ActionButton_ShowOverlayGlow(Bodhi.renew.sd)
 		if ocd == 1 then
@@ -656,6 +1003,7 @@ local function CreateTex(path, r, g, b, layer, size, blend, ...)
 	frame.tex = frame:CreateTexture(nil, layer)
 	frame.tex:SetAllPoints(frame)
 	frame.tex:SetTexture(path)
+	frame.tex:SetDesaturated(true)
 	frame.tex:SetVertexColor(r, g, b, .8)
 	
 	if blend then
