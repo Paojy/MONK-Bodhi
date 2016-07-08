@@ -1,5 +1,5 @@
-﻿## Interface: 60200
-## Title: |cff02F78E武僧|r Bodhi
+﻿## Interface: 70000
+## Title: |cff02F78EMonk|r Bodhi
 ## Version: 6.10
 ## Author: Paopao001
 ## SavedVariablesPerCharacter: Bodhi_DB
