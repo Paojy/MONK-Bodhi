@@ -9,6 +9,7 @@ local Iconsize = 33 -- 图标大小
 local font = GameFontHighlight:GetFont()
 local texture = "Interface\\Buttons\\WHITE8x8"
 local alpha = .6
+local level = 3
 
 local Bodhi = CreateFrame("Frame", "Bodhi", UIParent)
 Bodhi:SetPoint("CENTER", UIParent, "CENTER", -50, -120)
